@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/bash
 
 set -e
 
@@ -31,7 +31,7 @@ cmd_share() {
   echo "Sharing $path ..."
   tar -czf "$tmp1" "$path"
   senc -e -k "$key" <"$tmp1" >"$tmp2"
-  hash=(ipfs add -q "$tmp2")
+  hash=$(ipfs add -q "$tmp2")
   ilink="/ipfs/$hash"
 
   rm "$tmp1"

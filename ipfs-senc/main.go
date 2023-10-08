@@ -1,33 +1,33 @@
 package main
 
 import (
-  "os"
-  "fmt"
-  "flag"
-  "errors"
-  "strings"
+	"errors"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
 
-  mb "github.com/multiformats/go-multibase"
-  ipfssenc "github.com/jbenet/ipfs-senc"
-  senc "github.com/jbenet/go-simple-encrypt"
+	senc "github.com/jbenet/go-simple-encrypt"
+	ipfssenc "github.com/jbenet/ipfs-senc"
+	mb "github.com/multiformats/go-multibase"
 )
 
 // flags
 var (
-  Key string
-  API string
-  RandomKey bool
-  DirWrap bool
+	Key       string
+	API       string
+	RandomKey bool
+	DirWrap   bool
 )
 
 // errors
 var (
-  ErrNoIPFS = errors.New("ipfs node error: not online")
+	ErrNoIPFS = errors.New("ipfs node error: not online")
 )
 
 const (
-  gwayGlobal = "https://gateway.ipfs.io"
-  gwayLocal = "http://localhost:8080"
+	gwayGlobal = "https://gateway.ipfs.io"
+	gwayLocal  = "http://localhost:8080"
 )
 
 var Usage = `ENCRYPT AND SEND
@@ -60,160 +60,162 @@ EXAMPLES
 `
 
 func init() {
-  flag.BoolVar(&RandomKey, "random-key", false, "use a randomly generated key (deprecated opt)")
-  flag.StringVar(&Key, "key", "", "an AES encryption key in hex")
-  flag.StringVar(&API, "api", "", "override IPFS node API")
-  flag.BoolVar(&DirWrap, "w", false, "if adding a directory, wrap it first to preserve dir")
-  flag.BoolVar(&DirWrap, "wrap", false, "if adding a directory, wrap it first to preserve dir")
-  flag.Usage = func() {
-    fmt.Fprintf(os.Stderr, Usage)
-  }
+	flag.BoolVar(&RandomKey, "random-key", false, "use a randomly generated key (deprecated opt)")
+	flag.StringVar(&Key, "key", "", "an AES encryption key in hex")
+	flag.StringVar(&API, "api", "", "override IPFS node API")
+	flag.BoolVar(&DirWrap, "w", false, "if adding a directory, wrap it first to preserve dir")
+	flag.BoolVar(&DirWrap, "wrap", false, "if adding a directory, wrap it first to preserve dir")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, Usage)
+	}
 }
 
 func decodeKey(k string) ([]byte, error) {
-  _, b, err := mb.Decode(k)
-  if err != nil {
-    return nil, fmt.Errorf("multibase decoding error: %v", err)
-  }
-  if len(b) != 32 {
-    return nil, fmt.Errorf("key must be exactly 256 bits. Was: %d", len(b))
-  }
-  return b, nil
+	_, b, err := mb.Decode(k)
+	if err != nil {
+		return nil, fmt.Errorf("multibase decoding error: %v", err)
+	}
+	if len(b) != 32 {
+		return nil, fmt.Errorf("key must be exactly 256 bits. Was: %d", len(b))
+	}
+	return b, nil
 }
 
 func getSencKey(randomIfNone bool) (ipfssenc.Key, error) {
-  NilKey := ipfssenc.Key(nil)
+	NilKey := ipfssenc.Key(nil)
 
-  var k []byte
-  var err error
-  if Key != "" {
-    k, err = decodeKey(Key)
-  } else if randomIfNone { // random key
-    k, err = senc.RandomKey()
-  } else {
-    err = errors.New("Please enter a key with --key")
-  }
-  if err != nil {
-    return NilKey, err
-  }
+	var k []byte
+	var err error
+	if Key != "" {
+		k, err = decodeKey(Key)
+	} else if randomIfNone { // random key
+		k, err = senc.RandomKey()
+	} else {
+		err = errors.New("Please enter a key with --key")
+	}
+	if err != nil {
+		return NilKey, err
+	}
 
-  return ipfssenc.Key(k), nil
+	return ipfssenc.Key(k), nil
 }
 
 func cmdDownload(args []string) error {
-  if RandomKey {
-    return errors.New("cannot use --random-key with download")
-  }
-  if len(args) < 2 {
-    return errors.New("not enough arguments. download requires 2. see -h")
-  }
+	if RandomKey {
+		return errors.New("cannot use --random-key with download")
+	}
+	if len(args) < 2 {
+		return errors.New("not enough arguments. download requires 2. see -h")
+	}
 
-  srcLink := ipfssenc.IPFSLink(args[0])
-  if len(srcLink) < 1 {
-    return errors.New("invalid ipfs-link")
-  }
+	srcLink := ipfssenc.IPFSLink(args[0])
+	if len(srcLink) < 1 {
+		return errors.New("invalid ipfs-link")
+	}
 
-  dstPath := args[1]
-  if dstPath == "" {
-    return errors.New("requires a destination path")
-  }
+	dstPath := args[1]
+	if dstPath == "" {
+		return errors.New("requires a destination path")
+	}
 
-  // check for Key, get key.
-  key, err := getSencKey(false)
-  if err != nil {
-    return err
-  }
+	// check for Key, get key.
+	key, err := getSencKey(false)
+	if err != nil {
+		return err
+	}
 
-  // fmt.Println("Initializing ipfs node...")
-  n := ipfssenc.GetROIPFSNode(API)
-  if !n.IsUp() {
-    return ErrNoIPFS
-  }
+	// fmt.Println("Initializing ipfs node...")
+	n := ipfssenc.GetROIPFSNode(API)
+	if !n.IsUp() {
+		return ErrNoIPFS
+	}
 
-  // fmt.Println("Getting", srcLink, "...")
-  err = ipfssenc.GetDecryptAndUnbundle(n, srcLink, dstPath, key)
-  if err != nil {
-    return err
-  }
-  fmt.Println("Unbundled to:", dstPath)
-  return nil
+	// fmt.Println("Getting", srcLink, "...")
+	err = ipfssenc.GetDecryptAndUnbundle(n, srcLink, dstPath, key)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Unbundled to:", dstPath)
+	return nil
 }
 
 func cmdShare(args []string) error {
-  if len(args) < 1 {
-    return errors.New("not enough arguments. share requires 1. see -h")
-  }
-  srcPath := args[0]
-  if srcPath == "" {
-    return errors.New("requires a source path")
-  }
+	if len(args) < 1 {
+		return errors.New("not enough arguments. share requires 1. see -h")
+	}
+	srcPath := args[0]
+	if srcPath == "" {
+		return errors.New("requires a source path")
+	}
 
-  // check for Key, get key.
-  key, err := getSencKey(true)
-  if err != nil {
-    return err
-  }
+	// check for Key, get key.
+	key, err := getSencKey(true)
+	if err != nil {
+		return err
+	}
+	//API = "ipfs.io"
+	// fmt.Println("Initializing ipfs node...")
+	n, err := ipfssenc.GetRWIPFSNode(API)
+	if err != nil {
+		return err
+	}
+	if !n.IsUp() {
+		return ErrNoIPFS
+	}
 
-  // fmt.Println("Initializing ipfs node...")
-  n, err := ipfssenc.GetRWIPFSNode(API)
-  if err != nil {
-    return err
-  }
-  if !n.IsUp() {
-    return ErrNoIPFS
-  }
+	// fmt.Println("Sharing", srcPath, "...")
+	keyStr, err := mb.Encode(mb.Base58BTC, key)
+	fmt.Println(keyStr)
+	link, err := ipfssenc.BundleEncryptAndPut(n, srcPath, key, DirWrap)
+	if err != nil {
+		return err
+	}
 
-  // fmt.Println("Sharing", srcPath, "...")
-  link, err := ipfssenc.BundleEncryptAndPut(n, srcPath, key, DirWrap)
-  if err != nil {
-    return err
-  }
+	l := string(link)
+	if !strings.HasPrefix(l, "/ipfs/") {
+		l = "/ipfs/" + l
+	}
 
-  l := string(link)
-  if !strings.HasPrefix(l, "/ipfs/") {
-    l = "/ipfs/" + l
-  }
+	keyStr, err = mb.Encode(mb.Base58BTC, key)
+	if err != nil {
+		return err
+	}
 
-  keyStr, err := mb.Encode(mb.Base58BTC, key)
-  if err != nil {
-    return err
-  }
-
-  fmt.Println("Shared as: ", l)
-  fmt.Println("Key: ", keyStr)
-  fmt.Println("Ciphertext on local gateway: ", gwayGlobal, l)
-  fmt.Println("Ciphertext on global gateway: ", gwayLocal, l)
-  fmt.Println("")
-  fmt.Println("Get, Decrypt, and Unbundle with:")
-  fmt.Println("    ipfs-senc --key", keyStr, "download", l, "dstPath")
-  fmt.Println("")
-  fmt.Printf("View on the web: https://ipfs.io/ipns/ipfs-senc.net/#%s:%s\n", keyStr, l)
-  return nil
+	fmt.Println("Shared as: ", l)
+	fmt.Println("Key: ", keyStr)
+	fmt.Println("Ciphertext on local gateway: ", gwayGlobal, l)
+	fmt.Println("Ciphertext on global gateway: ", gwayLocal, l)
+	fmt.Println("")
+	fmt.Println("Get, Decrypt, and Unbundle with:")
+	fmt.Println("    ipfs-senc --key", keyStr, "download", l, "dstPath")
+	fmt.Println("")
+	fmt.Printf("View on the web: https://ipfs.io/ipns/ipfs-senc.net/#%s:%s\n", keyStr, l)
+	return nil
 }
 
 func errMain(args []string) error {
-  // no command is not an error. it's usage.
-  if len(args) == 0 {
-    fmt.Println(Usage)
-    return nil
-  }
+	// no command is not an error. it's usage.
+	if len(args) == 0 {
+		fmt.Println(Usage)
+		return nil
+	}
 
-  cmd := args[0]
-  switch cmd {
-  case "download":
-    return cmdDownload(args[1:])
-  case "share":
-    return cmdShare(args[1:])
-  default:
-    return errors.New("Unknown command: " + cmd)
-  }
+	cmd := args[0]
+	switch cmd {
+	case "download":
+		return cmdDownload(args[1:])
+	case "share":
+		return cmdShare(args[1:])
+	default:
+		return errors.New("Unknown command: " + cmd)
+	}
 }
 
 func main() {
-  flag.Parse()
-  args := flag.Args()
-  if err := errMain(args); err != nil {
-    fmt.Fprintln(os.Stderr, "error:", err)
-    os.Exit(-1)
-  }
+	flag.Parse()
+	args := flag.Args()
+	if err := errMain(args); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(-1)
+	}
 }
