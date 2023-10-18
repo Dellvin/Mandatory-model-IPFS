@@ -1,13 +1,16 @@
 package main
 
 import (
+	"encoding/base32"
 	"errors"
 	"flag"
 	"fmt"
+	senc "github.com/jbenet/go-simple-encrypt"
+	"ipfs-senc/kuznechik"
+	"ipfs-senc/stribog"
 	"os"
 	"strings"
 
-	senc "github.com/jbenet/go-simple-encrypt"
 	ipfssenc "github.com/jbenet/ipfs-senc"
 	mb "github.com/multiformats/go-multibase"
 )
@@ -32,21 +35,21 @@ const (
 
 var Usage = `ENCRYPT AND SEND
     # will ask for a key
-    ipfs-senc share <local-source-path>
+    go share <local-source-path>
 
     # encrypt with a known key. (256 bits please)
-    ipfs-senc --key <secret-key> share <local-source-path>
+    go --key <secret-key> share <local-source-path>
 
     # encrypt with a randomly generated key. will be printed out.
-    ipfs-senc --random-key share <local-source-path>
+    go --random-key share <local-source-path>
 
 
 GET AND DECRYPT
     # will ask for key
-    ipfs-senc download <ipfs-link> <local-destination-path>
+    go download <ipfs-link> <local-destination-path>
 
     # decrypt with given key.
-    ipfs-senc --key <secret-key> download <ipfs-link> <local-destination-path>
+    go --key <secret-key> download <ipfs-link> <local-destination-path>
 
 OPTIONS
     --h, --help              show usage
@@ -55,7 +58,7 @@ OPTIONS
     -w, --wrap               if adding a directory, wrap it first to preserve dir
 
 EXAMPLES
-    > ipfs-senc share my_secret_dir
+    > go share my_secret_dir
     Enter a 256 bit AES key in multibase:
 `
 
@@ -87,9 +90,15 @@ func getSencKey(randomIfNone bool) (ipfssenc.Key, error) {
 	var k []byte
 	var err error
 	if Key != "" {
-		k, err = decodeKey(Key)
+		k, err = base32.StdEncoding.DecodeString(Key)
 	} else if randomIfNone { // random key
-		k, err = senc.RandomKey()
+		randBuf, err := senc.RandomKey()
+		if err != nil {
+			return nil, fmt.Errorf("failed to RandomKey: %w", err)
+		}
+		sb := stribog.New256()
+		_, err = sb.Write(randBuf)
+		k = sb.Sum([]byte{})
 	} else {
 		err = errors.New("Please enter a key with --key")
 	}
@@ -132,9 +141,16 @@ func cmdDownload(args []string) error {
 
 	// fmt.Println("Getting", srcLink, "...")
 	err = ipfssenc.GetDecryptAndUnbundle(n, srcLink, dstPath, key)
+	rCloser, err := ipfssenc.Get(n, srcLink)
 	if err != nil {
 		return err
 	}
+
+	if err := kuznechik.FileDecode(rCloser, key, dstPath); err != nil {
+		return err
+	}
+
+	fmt.Println("SUCCESS!!!!!!!!!")
 	fmt.Println("Unbundled to:", dstPath)
 	return nil
 }
@@ -164,9 +180,15 @@ func cmdShare(args []string) error {
 	}
 
 	// fmt.Println("Sharing", srcPath, "...")
-	keyStr, err := mb.Encode(mb.Base58BTC, key)
-	fmt.Println(keyStr)
-	link, err := ipfssenc.BundleEncryptAndPut(n, srcPath, key, DirWrap)
+
+	fmt.Println(key)
+
+	reader, err := kuznechik.FileEncode(key, srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to cmdShare: %w", err)
+	}
+	link, err := ipfssenc.Put(n, reader)
+	//link, err := ipfssenc.BundleEncryptAndPut(n, srcPath, key, DirWrap)
 	if err != nil {
 		return err
 	}
@@ -175,21 +197,20 @@ func cmdShare(args []string) error {
 	if !strings.HasPrefix(l, "/ipfs/") {
 		l = "/ipfs/" + l
 	}
+	keyStr := base32.StdEncoding.EncodeToString(key)
 
-	keyStr, err = mb.Encode(mb.Base58BTC, key)
 	if err != nil {
 		return err
 	}
-
 	fmt.Println("Shared as: ", l)
-	fmt.Println("Key: ", keyStr)
+	fmt.Println("Key: '" + string(keyStr) + "'")
 	fmt.Println("Ciphertext on local gateway: ", gwayGlobal, l)
 	fmt.Println("Ciphertext on global gateway: ", gwayLocal, l)
 	fmt.Println("")
 	fmt.Println("Get, Decrypt, and Unbundle with:")
-	fmt.Println("    ipfs-senc --key", keyStr, "download", l, "dstPath")
+	fmt.Println("    go --key", keyStr, "download", l, "dstPath")
 	fmt.Println("")
-	fmt.Printf("View on the web: https://ipfs.io/ipns/ipfs-senc.net/#%s:%s\n", keyStr, l)
+	fmt.Printf("View on the web: https://ipfs.io/ipns/ipfs-senc.net/#%s:%s\n", key, l)
 	return nil
 }
 
@@ -211,6 +232,8 @@ func errMain(args []string) error {
 	}
 }
 
+// ipfs daemon
+// go go --key D44DHB54VE62PMID4JLG6WYZWTPKUJFO3Q2NJOOTKMUGKLX5B57A==== download /ipfs/Qme4rKqR3iDUa9iEx9iyYRTFhY4X1skXQFGSJdTGFQw9Zx
 func main() {
 	flag.Parse()
 	args := flag.Args()
