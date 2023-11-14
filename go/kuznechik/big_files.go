@@ -10,16 +10,49 @@ import (
 
 const batchSize = 16
 
-func FileEncode(key []byte, filePath string) (io.Reader, error) {
+func Read(key []byte, filePath string, crypto bool) (io.Reader, error) {
 	if buf, err := readFile(filePath); err == nil {
-		if encoded, err := bigTextEncode(key, buf); err == nil {
-			return bytes.NewReader(encoded), nil
-		} else {
-			return nil, fmt.Errorf("failed to bigTextEncode: %w", err)
+		if crypto {
+			if encoded, err := bigTextEncode(key, buf); err == nil {
+				return bytes.NewReader(encoded), nil
+			} else {
+				return nil, fmt.Errorf("failed to bigTextEncode: %w", err)
+			}
 		}
+
+		return bytes.NewReader(buf), nil
 	} else {
-		return nil, fmt.Errorf("failed to FileEncode: %w", err)
+		return nil, fmt.Errorf("failed to Read: %w", err)
 	}
+}
+
+func Write(closer io.ReadCloser, key []byte, path string, crypto bool) error {
+	var raw bytes.Buffer
+	tee := io.TeeReader(closer, &raw)
+
+	buf, err := ioutil.ReadAll(tee)
+	if err != nil {
+		return fmt.Errorf("failed to ReadAll: %w", err)
+	}
+
+	if crypto {
+		decoded, err := bigTextDecode(key, buf)
+		if err != nil {
+			return fmt.Errorf("failed to bigTextDecode: %w", err)
+		}
+
+		buf = decoded
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to Create: %w", err)
+	}
+	if _, err := f.Write(buf); err != nil {
+		return fmt.Errorf("failed to Write: %w", err)
+	}
+
+	return nil
 }
 
 func readFile(path string) ([]byte, error) {
@@ -29,31 +62,6 @@ func readFile(path string) ([]byte, error) {
 	}
 
 	return b, nil
-}
-
-func FileDecode(closer io.ReadCloser, key []byte, path string) error {
-	var raw bytes.Buffer
-	tee := io.TeeReader(closer, &raw)
-
-	newBuf, err := ioutil.ReadAll(tee)
-	if err != nil {
-		return fmt.Errorf("failed to ReadAll: %w", err)
-	}
-
-	decoded, err := bigTextDecode(key, newBuf)
-	if err != nil {
-		return fmt.Errorf("failed to bigTextDecode: %w", err)
-	}
-
-	f, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("failed to Create: %w", err)
-	}
-	if _, err := f.Write(decoded); err != nil {
-		return fmt.Errorf("failed to Write: %w", err)
-	}
-
-	return nil
 }
 
 func bigTextEncode(key, body []byte) ([]byte, error) {
