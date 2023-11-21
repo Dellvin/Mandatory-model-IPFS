@@ -8,7 +8,7 @@ import (
 	"ipfs-senc/kuznechik"
 )
 
-func Download(link, dstPath, keyRaw, api string, crypto bool) error {
+func Download(link, dstPath, keyRaw, api string, crypto bool, secure int) error {
 	srcLink := ipfssenc.IPFSLink(link)
 	if len(srcLink) < 1 {
 		return errors.New("invalid ipfs-link")

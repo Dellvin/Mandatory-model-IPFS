@@ -11,9 +11,10 @@ import (
 
 // flags
 var (
-	Key     string
-	API     string
-	Encrypt bool
+	Key        string
+	API        string
+	Encrypt    bool
+	SecureType int
 )
 
 var Usage = `ENCRYPT AND SEND
@@ -32,13 +33,17 @@ OPTIONS
     --h, --help              show usage
     --key <secret-key>       a 256bit secret key, encoded with multibase, ONLY in download required
     --api <ipfs-api-url>     an ipfs node api to use (overrides defaults)
-	--crypto                 if true, than it will encrypt your file on upload and decrypt on download.
+	--crypto                 if true, than it will encrypt your file on upload and decrypt on download
+	--secure_type            allowed security levels:
+							 	1) 0 - public, available for everybody
+								2) 1...n - secret, available for certain group
 `
 
 func init() {
 	flag.StringVar(&Key, "key", "", "an AES encryption key in hex")
 	flag.StringVar(&API, "api", "", "override IPFS node API")
-	flag.BoolVar(&Encrypt, "crypto", false, "if true, than it will encrypt your file on upload and decrypt on download.")
+	flag.BoolVar(&Encrypt, "crypto", false, "if true, than it will encrypt your file on upload and decrypt on download")
+	flag.IntVar(&SecureType, "secure_type", 0, "security level")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, Usage)
 	}
@@ -57,7 +62,7 @@ func errMain(args []string) error {
 		if len(args) < 2 {
 			return errors.New("not enough arguments. download requires 2. see -h")
 		}
-		return download.Download(args[1], args[2], Key, API, Encrypt)
+		return download.Download(args[1], args[2], Key, API, Encrypt, SecureType)
 	case "share":
 		if len(args) < 1 {
 			return errors.New("not enough arguments. share requires 1. see -h")
@@ -66,7 +71,7 @@ func errMain(args []string) error {
 		if srcPath == "" {
 			return errors.New("requires a source path")
 		}
-		return upload.Upload(Key, API, srcPath, Encrypt)
+		return upload.Upload(Key, API, srcPath, Encrypt, SecureType)
 	default:
 		return errors.New("Unknown command: " + cmd)
 	}

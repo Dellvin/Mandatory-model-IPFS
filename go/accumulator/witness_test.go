@@ -76,6 +76,7 @@ func Test_Membership(t *testing.T) {
 		curve.PointG1.Identity(),
 		curve.Scalar.One(),
 	}
+
 	err = wrongWit.Verify(pk, acc)
 	require.Error(t, err)
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func Upload(keyRaw, api, srcPath string, crypto bool) error {
+func Upload(keyRaw, api, srcPath string, crypto bool, secure int) error {
 	// check for Key, get key.
 	key, err := pkg.GetSencKey(keyRaw, true)
 	if err != nil {

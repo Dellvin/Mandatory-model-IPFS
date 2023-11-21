@@ -1,0 +1,22 @@
+version: '3.7'
+
+services:
+  db:
+    image: postgres:13.3-alpine
+    container_name: wb_db
+    restart: always
+    networks:
+      - installment-loc
+    volumes:
+      - ./loc/db:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: accumulator
+      POSTGRES_PASSWORD: 1538
+
+networks:
+  installment-loc:
+
+volumes:
+  db:
