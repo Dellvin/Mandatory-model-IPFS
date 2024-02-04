@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fentec-project/gofe/abe"
+	"math"
 )
 
 const (
-	securityLevelSpacialImportance = iota
+	securityLevelSecretly = iota + math.MaxInt - 3
 	securityLevelAbsolutelySecretly
-	securityLevelSecretly
+	securityLevelSpacialImportance
 )
 
 type SecretFile struct {
@@ -18,7 +19,7 @@ type SecretFile struct {
 	SecKey []byte
 }
 
-func encryptFile(department, securityLevel int, file string) (SecretFile, error) {
+func EncryptFile(department, securityLevel int, file []byte) (SecretFile, error) {
 	policy, err := createPolicy(department, securityLevel)
 	if err != nil {
 		return SecretFile{}, fmt.Errorf("failed to createPolicy: %w", err)
@@ -33,7 +34,7 @@ func encryptFile(department, securityLevel int, file string) (SecretFile, error)
 		return SecretFile{}, fmt.Errorf("failet to BooleanToMSP: %w", err)
 	}
 
-	cipher, err := a.Encrypt(file, msp, pubKey)
+	cipher, err := a.Encrypt(string(file), msp, pubKey)
 	if err != nil {
 		return SecretFile{}, fmt.Errorf("failed to Encrypt: %w", err)
 	}
@@ -63,11 +64,11 @@ func encryptFile(department, securityLevel int, file string) (SecretFile, error)
 func createPolicy(department, securityLevel int) (string, error) {
 	policy := fmt.Sprintf("%d AND (", department)
 	switch securityLevel {
-	case securityLevelSpacialImportance:
+	case 0:
 		policy = fmt.Sprintf("%s%d OR %d OR %d", policy, securityLevelAbsolutelySecretly, securityLevelSecretly, securityLevelSpacialImportance)
-	case securityLevelAbsolutelySecretly:
+	case 1:
 		policy = fmt.Sprintf("%s%d OR %d", policy, securityLevelAbsolutelySecretly, securityLevelSecretly)
-	case securityLevelSecretly:
+	case 2:
 		policy = fmt.Sprintf("%s%d", policy, securityLevelSecretly)
 	default:
 		return "", fmt.Errorf("unknown policy")

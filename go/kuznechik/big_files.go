@@ -10,17 +10,17 @@ import (
 
 const batchSize = 16
 
-func Read(key []byte, filePath string, crypto bool) (io.Reader, error) {
+func Read(key []byte, filePath string, crypto bool) ([]byte, error) {
 	if buf, err := readFile(filePath); err == nil {
 		if crypto {
 			if encoded, err := bigTextEncode(key, buf); err == nil {
-				return bytes.NewReader(encoded), nil
+				return encoded, nil
 			} else {
 				return nil, fmt.Errorf("failed to bigTextEncode: %w", err)
 			}
 		}
 
-		return bytes.NewReader(buf), nil
+		return buf, nil
 	} else {
 		return nil, fmt.Errorf("failed to Read: %w", err)
 	}

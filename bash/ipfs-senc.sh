@@ -30,7 +30,7 @@ cmd_share() {
 
   echo "Sharing $path ..."
   tar -czf "$tmp1" "$path"
-  senc -e -k "$key" <"$tmp1" >"$tmp2"
+#  senc -e -k "$key" <"$tmp1" >"$tmp2"
   hash=$(ipfs add -q "$tmp2")
   ilink="/ipfs/$hash"
 
@@ -55,7 +55,7 @@ cmd_download() {
 
   echo "Getting $ilink ..."
   ipfs cat "$ilink" >"$tmp2"
-  senc -d -k "$key" <"$tmp2" >"$tmp1"
+#  senc -d -k "$key" <"$tmp2" >"$tmp1"
   mkdir -p "$path"
   tar -xzf "$tmp1" -C "$path"
   echo "Unbundled into: $path"
