@@ -12,7 +12,7 @@ import (
 func TestCommon(t *testing.T) {
 	keys, err := setupFromFile()
 	assert.NoError(t, err)
-	wit, err := addUser(keys[0].Level, "alskjdfhiuaf", keys[1].SK)
+	wit, err := addUser(keys[0].Level, "alskjdfhiuaf", keys[0].SK)
 	assert.NoError(t, err)
 	ok, err := checkUser(keys[0].Level, wit, keys[0])
 	assert.NoError(t, err)

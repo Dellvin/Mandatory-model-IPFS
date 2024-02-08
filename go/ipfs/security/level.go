@@ -2,6 +2,7 @@ package security
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"github.com/coinbase/kryptology/pkg/core/curves"
 	"ipfs-senc/accumulator"
@@ -14,9 +15,173 @@ type AccumulatorKey struct {
 	Level int
 	SK    *accumulator.SecretKey
 	PK    *accumulator.PublicKey
+	Acc   *accumulator.Accumulator
+	Path  string
 }
 
+const (
+	typeLevel = iota
+	typeDepartment
+)
+
 const levelCount = 3
+
+func Add(level, department int, data []byte) ([]byte, []byte, error) { // data is a pk from abe
+	accLevel, err := getOrCreateAccumulatorByType(level, 0, typeLevel)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to getLevelAccumulator: %w", err)
+	}
+	witLevel, err := accLevel.add(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to add to accLevel: %w", err)
+	}
+
+	accDepartment, err := getOrCreateAccumulatorByType(0, department, typeDepartment)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to getLevelAccumulator: %w", err)
+	}
+	witDepartment, err := accDepartment.add(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to add to accDepartment: %w", err)
+	}
+
+	return witLevel, witDepartment, nil
+}
+
+func (acc *AccumulatorKey) add(data []byte) ([]byte, error) {
+	elem, err := curves.BLS12381(curves.BLS12381G1().Point).Scalar.SetBytes(hashBytes(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to SetBytes: %w", err)
+	}
+
+	acc.Acc, err = acc.Acc.Add(acc.SK, elem)
+	if err != nil {
+		return nil, fmt.Errorf("failed to Add: %w", err)
+	}
+
+	wit, err := new(accumulator.MembershipWitness).New(elem, acc.Acc, acc.SK)
+	if err != nil {
+		return nil, fmt.Errorf("failed to New: %w", err)
+	}
+
+	body, err := acc.Acc.MarshalBinary()
+
+	if err = rewriteFileByPath(acc.Path, body); err != nil {
+		return nil, fmt.Errorf("failed to rewriteFile: %w", err)
+	}
+
+	witBody, err := wit.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("failed to MarshalBinary: %w", err)
+	}
+
+	return witBody, nil
+}
+
+//func Check(level, department int, pk []byte, witLevel, witDepartment []byte) error {
+//	if level >= levelCount {
+//		return fmt.Errorf("level is bigger that supported. Max is " + strconv.Itoa(levelCount))
+//	}
+//	filePath := strconv.Itoa(level) + "_level.txt"
+//
+//	acc, err:=getAccumulatorByPath(filePath)
+//	if err!=nil{
+//		return fmt.Errorf("failed to getAccumulatorByPath: %w", err)
+//	}
+//
+//
+//	return nil
+//}
+//
+//func (acc *AccumulatorKey) check(wit []byte) ([]byte, error) {
+//
+//}
+
+func rewriteFileByPath(path string, body []byte) error {
+	if err := os.Truncate(path, 0); err != nil {
+		return fmt.Errorf("failed to Truncate: %w", err)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to Open: %w", err)
+	}
+	defer f.Close()
+
+	if err = os.WriteFile(path, body, os.ModeAppend); err != nil {
+		return fmt.Errorf("failed to Write: %w", err)
+	}
+
+	return nil
+}
+
+func getOrCreateAccumulatorByType(level, department int, which int) (AccumulatorKey, error) {
+	var filePath string
+	switch which {
+	case typeLevel:
+		if level >= levelCount {
+			return AccumulatorKey{}, fmt.Errorf("level is bigger that supported. Max is " + strconv.Itoa(levelCount))
+		}
+		filePath = strconv.Itoa(level) + "_level.txt"
+	case typeDepartment:
+		filePath = strconv.Itoa(level) + "_department.txt"
+	default:
+		return AccumulatorKey{}, fmt.Errorf("unknown type of accumulator")
+	}
+
+	if _, err := os.Stat(filePath); !errors.Is(err, os.ErrNotExist) {
+		acc, err := getAccumulatorByPath(filePath)
+		if err != nil {
+			return AccumulatorKey{}, fmt.Errorf("failed to getAccumulatorByPath: %w", err)
+		}
+
+		return AccumulatorKey{Acc: acc, Path: filePath}, err
+	}
+	// file not exists
+	curve := curves.BLS12381(curves.BLS12381G1().Point)
+	f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0777)
+	if err != nil {
+		return AccumulatorKey{}, fmt.Errorf("failed to setupFromFile: %w", err)
+	}
+
+	defer f.Close()
+	acc, err := new(accumulator.Accumulator).New(curve)
+	if err != nil {
+		return AccumulatorKey{}, fmt.Errorf("failed to New: %w", err)
+	}
+	buf, err := acc.MarshalBinary()
+	if err != nil {
+		return AccumulatorKey{}, fmt.Errorf("failed to MarshalBinary: %w", err)
+	}
+
+	if _, err := f.Write(buf); err != nil {
+		return AccumulatorKey{}, fmt.Errorf("failed to Write: %w", err)
+	}
+	sk, err := new(accumulator.SecretKey).New(curve, hashStr(""))
+	if err != nil {
+		return AccumulatorKey{}, fmt.Errorf("failed to create secret key: %w", err)
+	}
+	pk, err := sk.GetPublicKey(curve)
+	if err != nil {
+		return AccumulatorKey{}, fmt.Errorf("failed to GetPublicKey: %w", err)
+	}
+
+	return AccumulatorKey{PK: pk, SK: sk, Level: level, Acc: acc, Path: filePath}, nil
+}
+
+func getAccumulatorByPath(filePath string) (*accumulator.Accumulator, error) {
+	buf, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to ReadFile: %w", err)
+	}
+
+	acc := new(accumulator.Accumulator)
+	if err1 := acc.UnmarshalBinary(buf); err1 != nil {
+		return nil, fmt.Errorf("failed to UnmarshalBinary: %w", err1)
+	}
+
+	return acc, nil
+}
 
 // admin only
 func setupFromFile() ([]AccumulatorKey, error) {
@@ -55,7 +220,7 @@ func setupFromFile() ([]AccumulatorKey, error) {
 				if err != nil {
 					return fmt.Errorf("failed to GetPublicKey: %w", err)
 				}
-				keys = append(keys, AccumulatorKey{i, sk, pk})
+				keys = append(keys, AccumulatorKey{Level: i, SK: sk, PK: pk})
 			}
 			return nil
 		}()
@@ -73,7 +238,7 @@ func addUser(level int, user_id string, sk *accumulator.SecretKey) ([]byte, erro
 		return nil, fmt.Errorf("failed to getAccumulator: %w", err)
 	}
 
-	elem, err := curves.BLS12381(curves.BLS12381G1().Point).Scalar.SetBytes(hashStr(user_id)[:32])
+	elem, err := curves.BLS12381(curves.BLS12381G1().Point).Scalar.SetBytes(hashStr(user_id))
 	if err != nil {
 		return nil, fmt.Errorf("failed to SetBytes: %w", err)
 	}
@@ -183,4 +348,8 @@ func rewriteFile(level int, body []byte) error {
 
 func hashStr(str string) []byte {
 	return stribog.New256().Sum([]byte(base64.StdEncoding.EncodeToString([]byte(str))))[:32]
+}
+
+func hashBytes(str []byte) []byte {
+	return stribog.New256().Sum([]byte(base64.StdEncoding.EncodeToString(str)))[:32]
 }

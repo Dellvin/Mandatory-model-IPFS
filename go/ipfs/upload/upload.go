@@ -7,6 +7,7 @@ import (
 	ipfssenc "github.com/jbenet/ipfs-senc"
 	"ipfs-senc/abe"
 	"ipfs-senc/ipfs/pkg"
+	"ipfs-senc/ipfs/security"
 	"ipfs-senc/kuznechik"
 	"strings"
 )
@@ -42,6 +43,11 @@ func Upload(keyRaw, api, srcPath string, crypto bool, department, securityLevel 
 		return fmt.Errorf("failed to EncryptFile: %w", err)
 	}
 
+	witLevel, witDep, err := security.Add(securityLevel, department, SecretFile.PubKey)
+	if err != nil {
+		return fmt.Errorf("failed to Add: %w", err)
+	}
+
 	link, err := ipfssenc.Put(n, bytes.NewReader(SecretFile.Cipher))
 	if err != nil {
 		return fmt.Errorf("failed to Put: %w", err)
@@ -68,7 +74,9 @@ func Upload(keyRaw, api, srcPath string, crypto bool, department, securityLevel 
 	fmt.Printf("Your department: '%d'\n", department)
 	fmt.Printf("Your securityLevel: '%d'\n", securityLevel)
 	fmt.Println("Your crypto:", crypto)
-	//fmt.Printf("Your public key: '%s'\n", string(SecretFile.PubKey))
-	//fmt.Printf("Your private key: '%s'\n", string(SecretFile.SecKey))
+	fmt.Printf("Your public key: '%s'\n", string(SecretFile.PubKey))
+	fmt.Printf("Your private key: '%s'\n", string(SecretFile.SecKey))
+	fmt.Println("Your level witness: ", string(witLevel))
+	fmt.Println("Your department witness: ", string(witDep))
 	return nil
 }
