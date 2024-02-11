@@ -14,7 +14,7 @@ func TestCommon(t *testing.T) {
 	assert.NoError(t, err)
 	wit, err := addUser(keys[0].Level, "alskjdfhiuaf", keys[0].SK)
 	assert.NoError(t, err)
-	ok, err := checkUser(keys[0].Level, wit, keys[0])
+	ok, err := checkUser(keys[0].Level, wit, keys[1])
 	assert.NoError(t, err)
 	assert.True(t, ok)
 

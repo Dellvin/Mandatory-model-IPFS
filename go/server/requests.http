@@ -1,0 +1,30 @@
+### add user
+POST http://localhost:1323/accumulator
+Content-Type: application/json
+
+{
+  "level": 1,
+  "department": 1,
+  "data": "YWw7c2tqZGhmYWtzamhkZmxha3NqZGhmbGFza2poZGZsYXNramZoYWxza2RqZmhhc2xka2ZqaA=="
+}
+
+### check user
+PUT http://localhost:1323/accumulator
+Content-Type: application/json
+
+{
+  "level": 1,
+  "department": 1,
+  "wit_level":      "UJfx06cxl9eUJpVjjE+prA/DaIxPl3S5BaFOOj8XG6xYbFXoP/l6Gu/7OvAK2yLGu1lXdzdjMnRxWkdobVlXdHphbWhrWm14aGEzTnFaR2htCkJMUzEyMzgxRzE=",
+  "wit_department": "UJfx06cxl9eUJpVjjE+prA/DaIxPl3S5BaFOOj8XG6xYbFXoP/l6Gu/7OvAK2yLGu1lXdzdjMnRxWkdobVlXdHphbWhrWm14aGEzTnFaR2htCkJMUzEyMzgxRzE="
+}
+
+### delete user
+DELETE http://localhost:1323/accumulator
+Content-Type: application/json
+
+{
+  "level": 1,
+  "department": 1,
+  "data": "YWw7c2tqZGhmYWtzamhkZmxha3NqZGhmbGFza2poZGZsYXNramZoYWxza2RqZmhhc2xka2ZqaA=="
+}
