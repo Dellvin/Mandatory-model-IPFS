@@ -3,6 +3,8 @@ services:
   db:
     image: postgres:13.3-alpine
     restart: "no"
+    ports:
+      - "5432:5432"
     networks:
       - installment-loc
     volumes:
@@ -13,17 +15,17 @@ services:
       POSTGRES_DB: sos
       POSTGRES_PASSWORD: 1538
 
-  proxy:
-    ports:
-      - "8080:8080"
-    build:
-      context: ../../Proxy
-      dockerfile: ./build/docker/prod/Dockerfile
-    restart: always
-    depends_on:
-      - db
-    networks:
-      - installment-loc
-
+#  proxy:
+#    ports:
+#      - "8080:8080"
+#    build:
+#      context: ../
+#      dockerfile: ./build/Dockerfile
+#    restart: always
+#    depends_on:
+#      - db
+#    networks:
+#      - installment-loc
+#
 networks:
   installment-loc:

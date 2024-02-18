@@ -71,7 +71,7 @@ func ParseFlags() (string, error) {
 
 	// Set up a CLI flag called "-config" to allow users
 	// to supply the configuration file
-	flag.StringVar(&configPath, "config", "./build/conf/local_conf.yaml", "path to config file")
+	flag.StringVar(&configPath, "config", "./build/config.yaml", "path to config file")
 
 	// Actually parse the flags
 	flag.Parse()

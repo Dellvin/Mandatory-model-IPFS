@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/go-playground/validator"
+	"github.com/jackc/pgx"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
@@ -37,11 +39,15 @@ func main() {
 		panic(err)
 	}
 
-	if err = storage.CreateTableAbe(db.DB); err != nil {
+	if err = storage.CreateTableAbe(db.DB); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		panic(err)
 	}
 
-	if err = storage.CreateTableAccum(db.DB); err != nil {
+	if err = storage.CreateTableWitness(db.DB); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		panic(err)
+	}
+
+	if err = storage.CreateTableAccumulator(db.DB); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		panic(err)
 	}
 
@@ -61,7 +67,7 @@ func main() {
 	e.POST("/file/decrypt", decrypt)
 
 	// Start server
-	e.Logger.Fatal(e.Start(":1323"))
+	e.Logger.Fatal(e.Start(cfg.Server.Port))
 }
 
 func (cv *CustomValidator) Validate(i interface{}) error {
@@ -89,18 +95,18 @@ func add(c echo.Context) error {
 
 	data, err := base64.StdEncoding.DecodeString(req.ID)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString data: %w", err)
+		c.Logger().Errorf("failed to DecodeString data: %s", err.Error())
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	witLevel, witDep, err := security.Add(req.Level, req.Department, data)
 	if err != nil {
-		c.Logger().Errorf("failed to Add: %w", err)
+		c.Logger().Errorf("failed to Add: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	if err := storage.SetAccum(db.DB, storage.Accum{ID: req.ID, WitnessLevel: base64.StdEncoding.EncodeToString(witLevel), WitnessDep: base64.StdEncoding.EncodeToString(witDep)}); err != nil {
-		c.Logger().Errorf("failed to SetAccum level: %w", err)
+	if err := storage.SetWitness(db.DB, storage.Witness{ID: req.ID, WitnessLevel: base64.StdEncoding.EncodeToString(witLevel), WitnessDep: base64.StdEncoding.EncodeToString(witDep)}); err != nil {
+		c.Logger().Errorf("failed to SetWitness level: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
@@ -109,7 +115,7 @@ func add(c echo.Context) error {
 
 // Handler
 func check(c echo.Context) error {
-	var req RequestCheck
+	var req RequestAdd
 	if c.Request().Header.Get("X-Admin-Key") != adminHeader {
 		c.Logger().Errorf("incorrect admin header")
 		return echo.NewHTTPError(http.StatusForbidden, "incorrect admin header")
@@ -122,20 +128,26 @@ func check(c echo.Context) error {
 		return err
 	}
 
-	witLevel, err := base64.StdEncoding.DecodeString(req.WitLevel)
+	accum, err := storage.GetWitness(db.DB, req.ID)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString wit_level: %w", err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		c.Logger().Errorf("failed to GetWitness: %s", err.Error())
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	witDep, err := base64.StdEncoding.DecodeString(req.WitDepartment)
+	witLevel, err := base64.StdEncoding.DecodeString(accum.WitnessLevel)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString wit_department: %w", err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		c.Logger().Errorf("failed to DecodeString wit level: %s", err.Error())
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	witDep, err := base64.StdEncoding.DecodeString(accum.WitnessDep)
+	if err != nil {
+		c.Logger().Errorf("failed to DecodeString wit dep: %s", err.Error())
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	if err = security.Check(req.Level, req.Department, witLevel, witDep); err != nil {
-		c.Logger().Errorf("failed to Check: %w", err)
+		c.Logger().Errorf("failed to Delete: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
@@ -143,7 +155,7 @@ func check(c echo.Context) error {
 }
 
 // Handler
-func delete(c echo.Context) error {
+func delete(c echo.Context) error { // TODO add delete from DB
 	var req RequestAdd
 	if c.Request().Header.Get("X-Admin-Key") != adminHeader {
 		c.Logger().Errorf("incorrect admin header")
@@ -159,7 +171,7 @@ func delete(c echo.Context) error {
 
 	err := security.Delete(req.Level, req.Department, []byte(req.ID))
 	if err != nil {
-		c.Logger().Errorf("failed to Delete: %w", err)
+		c.Logger().Errorf("failed to Delete: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
@@ -179,39 +191,43 @@ func encrypt(c echo.Context) error {
 
 	accum, err := storage.GetWitness(db.DB, req.ID)
 	if err != nil {
-		c.Logger().Errorf("failed to GetWitness: %w", err)
-		return c.JSON(http.StatusInternalServerError, err)
+		c.Logger().Errorf("failed to GetWitness: %s", err.Error())
+		return c.JSON(http.StatusInternalServerError, err.Error())
 	}
 
 	witLevel, err := base64.StdEncoding.DecodeString(accum.WitnessLevel)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString wit level: %w", err)
-		return c.JSON(http.StatusInternalServerError, err)
+		c.Logger().Errorf("failed to DecodeString wit level: %s", err.Error())
+		return c.JSON(http.StatusInternalServerError, err.Error())
 	}
 
 	witDep, err := base64.StdEncoding.DecodeString(accum.WitnessDep)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString wit dep: %w", err)
-		return c.JSON(http.StatusInternalServerError, err)
+		c.Logger().Errorf("failed to DecodeString wit dep: %s", err.Error())
+		return c.JSON(http.StatusInternalServerError, err.Error())
 	}
 
 	if err = security.Check(req.Level, req.Department, witLevel, witDep); err != nil {
-		c.Logger().Errorf("failed to Delete: %w", err)
+		c.Logger().Errorf("failed to Delete: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	cipherRaw, depAuthRaw, levelAuthRaw, err := abe.Encrypt(req.Department, req.Level, []byte(req.File))
 	if err != nil {
-		c.Logger().Errorf("failed to Encrypt: %w", err)
+		c.Logger().Errorf("failed to Encrypt: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	if err = storage.SetAbe(db.DB, storage.AbeAuth{ID: string(stribog.New512().Sum(cipherRaw)), LevelAuth: base64.StdEncoding.EncodeToString(levelAuthRaw), DepAuth: base64.StdEncoding.EncodeToString(depAuthRaw)}); err != nil {
-		c.Logger().Errorf("failed to SetAbe: %w", err)
+	base64Cipher := base64.StdEncoding.EncodeToString(cipherRaw)
+	if err = storage.SetAbe(db.DB, storage.AbeAuth{
+		ID:        base64.StdEncoding.EncodeToString(stribog.New512().Sum([]byte(base64Cipher))),
+		LevelAuth: base64.StdEncoding.EncodeToString(levelAuthRaw),
+		DepAuth:   base64.StdEncoding.EncodeToString(depAuthRaw)}); err != nil {
+		c.Logger().Errorf("failed to SetAbe: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, ResponseFile{File: base64.StdEncoding.EncodeToString(cipherRaw)})
+	return c.JSON(http.StatusOK, ResponseFile{File: base64Cipher})
 }
 
 // Handler
@@ -227,50 +243,56 @@ func decrypt(c echo.Context) error {
 
 	accum, err := storage.GetWitness(db.DB, req.ID)
 	if err != nil {
-		c.Logger().Errorf("failed to GetWitness: %w", err)
+		c.Logger().Errorf("failed to GetWitness: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	witLevel, err := base64.StdEncoding.DecodeString(accum.WitnessLevel)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString wit level: %w", err)
+		c.Logger().Errorf("failed to DecodeString wit level: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	witDep, err := base64.StdEncoding.DecodeString(accum.WitnessDep)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString wit dep: %w", err)
+		c.Logger().Errorf("failed to DecodeString wit dep: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	if err = security.Check(req.Level, req.Department, witLevel, witDep); err != nil {
-		c.Logger().Errorf("failed to Delete: %w", err)
-		return c.JSON(http.StatusInternalServerError, err)
+		c.Logger().Errorf("failed to Check: %s", err.Error())
+		return c.JSON(http.StatusForbidden, err.Error())
 	}
 
-	auth, err := storage.GetAbe(db.DB, string(stribog.New512().Sum([]byte(req.File))))
+	auth, err := storage.GetAbe(db.DB, base64.StdEncoding.EncodeToString(stribog.New512().Sum([]byte(req.File))))
 	if err != nil {
-		c.Logger().Errorf("failed to GetAbe: %w", err)
+		c.Logger().Errorf("failed to GetAbe: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	authLevel, err := base64.StdEncoding.DecodeString(auth.LevelAuth)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString wit auth: %w", err)
+		c.Logger().Errorf("failed to DecodeString wit auth: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	authDep, err := base64.StdEncoding.DecodeString(auth.DepAuth)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString dep auth: %w", err)
+		c.Logger().Errorf("failed to DecodeString dep auth: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	file, err := abe.Decrypt(req.Department, req.Level, []byte(req.File), authDep, authLevel)
+	cipher, err := base64.StdEncoding.DecodeString(req.File)
 	if err != nil {
-		c.Logger().Errorf("failed to Encrypt: %w", err)
+		c.Logger().Errorf("failed to DecodeString file: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, ResponseFile{File: base64.StdEncoding.EncodeToString(file)})
+	file, err := abe.Decrypt(req.Department, req.Level, cipher, authDep, authLevel)
+	if err != nil {
+		c.Logger().Errorf("failed to Encrypt: %s", err.Error())
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, ResponseFile{File: string(file)}) // TODO add base64
 }

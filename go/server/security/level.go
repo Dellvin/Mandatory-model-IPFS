@@ -4,11 +4,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/coinbase/kryptology/pkg/core/curves"
 	"os"
+	"strconv"
+
+	"github.com/coinbase/kryptology/pkg/core/curves"
+
 	"server/accumulator"
 	"server/stribog"
-	"strconv"
 )
 
 type AccumulatorKey struct {
@@ -24,7 +26,7 @@ const (
 	typeDepartment
 )
 
-const levelCount = 3
+const levelCount = 5
 
 func Add(level, department int, data []byte) ([]byte, []byte, error) { // data is a pk from abe
 	accLevel, err := getOrCreateAccumulatorByType(level, 0, typeLevel)
