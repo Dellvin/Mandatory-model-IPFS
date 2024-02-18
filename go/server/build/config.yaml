@@ -1,0 +1,13 @@
+server:
+  default_port: ":8080"
+  read_timeout: "10s"
+  write_timeout: "10s"
+  access_token:  ""
+
+database:
+  username: "postgres"
+  password: "1538"
+  name: "sos"
+  port: "5432"
+  ssl_mode: "disable"
+  host: "localhost"
