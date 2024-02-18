@@ -5,6 +5,7 @@ go 1.19
 require (
 	git.sr.ht/~sircmpwn/go-bare v0.0.0-20210406120253-ab86bc2846d9
 	github.com/coinbase/kryptology v1.8.0
+	github.com/fentec-project/gofe v0.0.0-20220829150550-ccc7482d20ef
 	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/labstack/echo/v4 v4.11.4
 	github.com/stretchr/testify v1.8.4
@@ -16,6 +17,7 @@ require (
 	github.com/bwesterb/go-ristretto v1.2.0 // indirect
 	github.com/consensys/gnark-crypto v0.5.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/fentec-project/bn256 v0.0.0-20190726093940-0d0fc8bfeed0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
