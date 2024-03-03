@@ -1,11 +1,11 @@
-package abe
+package crypto
 
 import (
 	"encoding/json"
 	"fmt"
 	"strconv"
 
-	"github.com/fentec-project/gofe/abe"
+	"server/abe"
 )
 
 func Encrypt(dep, level int, file []byte) ([]byte, []byte, []byte, error) {

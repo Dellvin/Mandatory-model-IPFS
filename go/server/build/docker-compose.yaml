@@ -8,14 +8,14 @@ services:
     networks:
       - installment-loc
     volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./loc/db:/var/lib/postgresql/data
-      - $PWD/../../init.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
       POSTGRES_USER: postgres
       POSTGRES_DB: sos
       POSTGRES_PASSWORD: 1538
 
-#  proxy:
+#  server:
 #    ports:
 #      - "8080:8080"
 #    build:

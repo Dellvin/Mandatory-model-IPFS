@@ -28,7 +28,7 @@ const (
 
 const levelCount = 5
 
-func Add(level, department int, data []byte) ([]byte, []byte, error) { // data is a pk from abe
+func Add(level, department int, data []byte) ([]byte, []byte, error) { // data is a pk from crypto
 	accLevel, err := getOrCreateAccumulatorByType(level, 0, typeLevel)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to getLevelAccumulator: %w", err)

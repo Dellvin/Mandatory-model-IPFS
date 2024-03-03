@@ -1,4 +1,4 @@
-package abe
+package crypto
 
 import (
 	"testing"
