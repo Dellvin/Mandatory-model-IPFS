@@ -7,6 +7,7 @@ type RequestAdd struct {
 	Department int    `json:"Department"`
 	ID         int    `json:"ID"`
 	PK         string `json:"PK"`
+	TgName     string `json:"TgName"`
 }
 
 type RequestFile struct {

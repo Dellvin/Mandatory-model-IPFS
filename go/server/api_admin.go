@@ -3,19 +3,16 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/labstack/echo/v4"
 	"net/http"
+
+	"github.com/labstack/echo/v4"
+
 	"server/security"
 	"server/storage"
 )
 
 func add(c echo.Context) error {
 	var req RequestAdd
-	if c.Request().Header.Get("X-Admin-Key") != adminHeader {
-		c.Logger().Errorf("incorrect admin header")
-		return echo.NewHTTPError(http.StatusForbidden, "incorrect admin header")
-	}
-
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
@@ -23,7 +20,7 @@ func add(c echo.Context) error {
 		return err
 	}
 
-	user, err := storage.AddUser(db.DB, req.Level, req.Department)
+	user, err := storage.AddUser(db.DB, req.TgName, req.Level, req.Department)
 	if err != nil {
 		return fmt.Errorf("failed to AddUser: %w", err)
 	}
@@ -51,10 +48,6 @@ func add(c echo.Context) error {
 // Handler
 func check(c echo.Context) error {
 	var req RequestAdd
-	if c.Request().Header.Get("X-Admin-Key") != adminHeader {
-		c.Logger().Errorf("incorrect admin header")
-		return echo.NewHTTPError(http.StatusForbidden, "incorrect admin header")
-	}
 
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -63,8 +56,8 @@ func check(c echo.Context) error {
 		return err
 	}
 
-	if err := storage.CheckUser(db.DB, req.ID, req.PK); err != nil {
-		return fmt.Errorf("failed to CheckUser: %w", err)
+	if err := storage.CheckUserPK(db.DB, req.ID, req.PK); err != nil {
+		return fmt.Errorf("failed to CheckUserPK: %w", err)
 	}
 
 	accum, err := storage.GetWitness(db.DB, req.PK)
@@ -96,10 +89,6 @@ func check(c echo.Context) error {
 // Handler
 func delete(c echo.Context) error { // TODO add delete from DB
 	var req RequestAdd
-	if c.Request().Header.Get("X-Admin-Key") != adminHeader {
-		c.Logger().Errorf("incorrect admin header")
-		return echo.NewHTTPError(http.StatusForbidden, "incorrect admin header")
-	}
 
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -108,7 +97,7 @@ func delete(c echo.Context) error { // TODO add delete from DB
 		return err
 	}
 
-	if err := storage.DeleteUser(db.DB, req.ID, req.PK); err != nil {
+	if err := storage.DeleteUser(db.DB, req.ID, req.TgName, req.PK); err != nil {
 		return fmt.Errorf("failed to DeleteUser: %w", err)
 	}
 
@@ -128,10 +117,6 @@ func delete(c echo.Context) error { // TODO add delete from DB
 // Handler
 func getAll(c echo.Context) error {
 	var req RequestAdd
-	if c.Request().Header.Get("X-Admin-Key") != adminHeader {
-		c.Logger().Errorf("incorrect admin header")
-		return echo.NewHTTPError(http.StatusForbidden, "incorrect admin header")
-	}
 
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())

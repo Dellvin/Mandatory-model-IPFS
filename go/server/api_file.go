@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/base64"
-	"github.com/labstack/echo/v4"
 	"net/http"
+
+	"github.com/labstack/echo/v4"
+
 	"server/crypto"
 	"server/security"
 	"server/storage"
@@ -20,8 +22,8 @@ func encrypt(c echo.Context) error {
 		return err
 	}
 
-	if err := storage.CheckUser(db.DB, req.ID, req.PK); err != nil {
-		c.Logger().Errorf("failed to CheckUser: %s", err.Error())
+	if err := storage.CheckUserPK(db.DB, req.ID, req.PK); err != nil {
+		c.Logger().Errorf("failed to CheckUserPK: %s", err.Error())
 		return c.JSON(http.StatusForbidden, err.Error())
 	}
 
@@ -77,8 +79,8 @@ func decrypt(c echo.Context) error {
 		return err
 	}
 
-	if err := storage.CheckUser(db.DB, req.ID, req.PK); err != nil {
-		c.Logger().Errorf("failed to CheckUser: %s", err.Error())
+	if err := storage.CheckUserPK(db.DB, req.ID, req.PK); err != nil {
+		c.Logger().Errorf("failed to CheckUserPK: %s", err.Error())
 		return c.JSON(http.StatusForbidden, err.Error())
 	}
 

@@ -1,11 +1,12 @@
 ### ADMIN add user
-POST http://localhost:8080/admin/add
+POST http://localhost:8088/admin/add
 X-Admin-Key: admin
 Content-Type: application/json
 
 {
   "level": 1,
-  "department": 1
+  "department": 1,
+  "TgName": "DellvinBlack"
 }
 
 ### ADMIN check user

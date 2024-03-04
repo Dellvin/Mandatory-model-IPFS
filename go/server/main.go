@@ -1,14 +1,22 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
 
 	"github.com/go-playground/validator"
+	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 	"github.com/jackc/pgx"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"server/config"
 	"server/storage"
@@ -16,10 +24,11 @@ import (
 
 var db storage.Database
 
-const adminHeader = "admin"
+func init() {
+	zap.ReplaceGlobals(zap.Must(zap.NewProduction()))
+}
 
 func main() {
-
 	cfgPath, err := config.ParseFlags()
 	if err != nil {
 		panic(err)
@@ -58,6 +67,7 @@ func main() {
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(cfg.Process)
 
 	// Routes
 	e.POST("/admin/add", add)
@@ -67,8 +77,72 @@ func main() {
 	e.POST("/file/encrypt", encrypt)
 	e.POST("/file/decrypt", decrypt)
 
-	// Start server
-	e.Logger.Fatal(e.Start(cfg.Server.Port))
+	// set up tg bot
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	opts := []bot.Option{
+		bot.WithMiddlewares(showMessageWithUserName),
+		bot.WithDefaultHandler(handler),
+	}
+
+	b, err := bot.New("6893355444:AAG0A2AJ3GjcJ6eyf9u456YyZSFJFZ_ADEk", opts...)
+	if nil != err {
+		// panics for the sake of simplicity.
+		// you should handle this error properly in your code.
+		panic(err)
+	}
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		// Start server
+		return fmt.Errorf("failed to Start server: %w", e.Start(cfg.Server.Port))
+	})
+	g.Go(func() error {
+		// Start tg bot listener
+		b.Start(ctx)
+		return fmt.Errorf("failed to Start tg bot")
+	})
+
+	if err = g.Wait(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func showMessageWithUserName(next bot.HandlerFunc) bot.HandlerFunc {
+	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
+		l := zap.L().With(zap.String("username", update.Message.From.Username), zap.String("message", update.Message.Text))
+		if user, err := storage.GetUserByTgName(db.DB, update.Message.From.Username); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				l.Info("unknown user")
+				_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+					ChatID: update.Message.Chat.ID,
+					Text:   "Your account not found in database! Please contact your system administrator.",
+				})
+				if err != nil {
+					l.Error("failed to send message", zap.Error(err))
+				}
+				return
+			} else {
+				l.Error("failed to GetUserByTgName", zap.Error(err))
+				_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+					ChatID: update.Message.Chat.ID,
+					Text:   "Internal server error. Sorry",
+				})
+				if err != nil {
+					l.Error("failed to send message", zap.Error(err))
+				}
+				return
+			}
+		} else {
+			l.Info("found user")
+			ctx = context.WithValue(ctx, "user", &user)
+		}
+
+		ctx = context.WithValue(ctx, "logger", l)
+
+		next(ctx, b, update)
+	}
 }
 
 func (cv *CustomValidator) Validate(i interface{}) error {

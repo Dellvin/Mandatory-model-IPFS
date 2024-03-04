@@ -3,9 +3,11 @@ package config
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"gopkg.in/yaml.v3"
 )
 
@@ -18,6 +20,7 @@ type Server struct {
 	Port         string        `yaml:"default_port"`
 	ReadTimeout  time.Duration `yaml:"read_timeout"`
 	WriteTimeout time.Duration `yaml:"write_timeout"`
+	AdminToken   string        `yaml:"admin_token"`
 }
 
 type DB struct {
@@ -83,4 +86,16 @@ func ParseFlags() (string, error) {
 
 	// Return the configuration path
 	return configPath, nil
+}
+
+// Process is the middleware function.
+func (conf *Config) Process(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if c.Request().Header.Get("X-Admin-Key") != conf.Server.AdminToken {
+			c.Logger().Errorf("incorrect admin header")
+			return echo.NewHTTPError(http.StatusForbidden, "incorrect admin header")
+		}
+
+		return next(c)
+	}
 }

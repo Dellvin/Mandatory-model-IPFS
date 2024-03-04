@@ -5,11 +5,15 @@ go 1.19
 require (
 	git.sr.ht/~sircmpwn/go-bare v0.0.0-20210406120253-ab86bc2846d9
 	github.com/coinbase/kryptology v1.8.0
+	github.com/fentec-project/bn256 v0.0.0-20190726093940-0d0fc8bfeed0
 	github.com/fentec-project/gofe v0.0.0-20220829150550-ccc7482d20ef
 	github.com/go-playground/validator v9.31.0+incompatible
+	github.com/go-telegram/bot v1.1.5
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/labstack/echo/v4 v4.11.4
 	github.com/stretchr/testify v1.8.4
+	go.uber.org/zap v1.27.0
+	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -20,7 +24,6 @@ require (
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/consensys/gnark-crypto v0.5.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fentec-project/bn256 v0.0.0-20190726093940-0d0fc8bfeed0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
@@ -37,6 +40,7 @@ require (
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.17.0 // indirect
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect

@@ -1,8 +1,8 @@
 server:
-  default_port: ":8080"
+  default_port: ":8088"
   read_timeout: "10s"
   write_timeout: "10s"
-  access_token:  ""
+  admin_token:  "admin"
 
 database:
   user: "postgres"
