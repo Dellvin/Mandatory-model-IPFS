@@ -11,3 +11,6 @@ database:
   port: "5432"
   ssl_mode: "disable"
   host: "localhost"
+
+telegram:
+  key: "6893355444:AAG0A2AJ3GjcJ6eyf9u456YyZSFJFZ_ADEk"

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"server/pkg"
 
 	"github.com/go-playground/validator"
 	"github.com/go-telegram/bot"
@@ -60,6 +61,10 @@ func main() {
 		panic(err)
 	}
 
+	if err = storage.CreateTableFile(db.DB); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		panic(err)
+	}
+
 	// Echo instance
 	e := echo.New()
 	e.Validator = &CustomValidator{validator: validator.New()}
@@ -74,7 +79,7 @@ func main() {
 	e.PUT("/admin/check", check)
 	e.DELETE("/admin/delete", delete)
 	e.GET("/admin/all", getAll)
-	e.POST("/file/encrypt", encrypt)
+	e.POST("/file/Encrypt", Encrypt)
 	e.POST("/file/decrypt", decrypt)
 
 	// set up tg bot
@@ -84,9 +89,10 @@ func main() {
 	opts := []bot.Option{
 		bot.WithMiddlewares(showMessageWithUserName),
 		bot.WithDefaultHandler(handler),
+		bot.WithCallbackQueryDataHandler("button", bot.MatchTypePrefix, callbackHandler),
 	}
 
-	b, err := bot.New("6893355444:AAG0A2AJ3GjcJ6eyf9u456YyZSFJFZ_ADEk", opts...)
+	b, err := bot.New(cfg.Telegram.Key, opts...)
 	if nil != err {
 		// panics for the sake of simplicity.
 		// you should handle this error properly in your code.
@@ -111,12 +117,25 @@ func main() {
 
 func showMessageWithUserName(next bot.HandlerFunc) bot.HandlerFunc {
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
-		l := zap.L().With(zap.String("username", update.Message.From.Username), zap.String("message", update.Message.Text))
-		if user, err := storage.GetUserByTgName(db.DB, update.Message.From.Username); err != nil {
+		data, err := pkg.GetTgData(update)
+		if err != nil {
+			zap.L().Error("failed to getTgData", zap.Error(err))
+			_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "Internal server error. Sorry",
+			})
+			if err != nil {
+				zap.L().Error("failed to send message", zap.Error(err))
+			}
+			return
+		}
+
+		l := zap.L().With(zap.String("username", data.Username), zap.String("message", data.Text))
+		if user, err := storage.GetUserByTgName(db.DB, data.Username); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				l.Info("unknown user")
 				_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-					ChatID: update.Message.Chat.ID,
+					ChatID: data.ChatID,
 					Text:   "Your account not found in database! Please contact your system administrator.",
 				})
 				if err != nil {
@@ -126,7 +145,7 @@ func showMessageWithUserName(next bot.HandlerFunc) bot.HandlerFunc {
 			} else {
 				l.Error("failed to GetUserByTgName", zap.Error(err))
 				_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-					ChatID: update.Message.Chat.ID,
+					ChatID: data.ChatID,
 					Text:   "Internal server error. Sorry",
 				})
 				if err != nil {
@@ -140,6 +159,7 @@ func showMessageWithUserName(next bot.HandlerFunc) bot.HandlerFunc {
 		}
 
 		ctx = context.WithValue(ctx, "logger", l)
+		ctx = context.WithValue(ctx, "data", &data)
 
 		next(ctx, b, update)
 	}

@@ -14,6 +14,16 @@ import (
 type Config struct {
 	Server   Server `yaml:"server"`
 	Database DB     `yaml:"database"`
+	IPFS     IPFS   `yaml:"ipfs"`
+	Telegram Tg     `yaml:"telegram"`
+}
+
+type IPFS struct {
+	API string `yaml:"api"`
+}
+
+type Tg struct {
+	Key string `yaml:"key"`
 }
 
 type Server struct {

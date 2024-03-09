@@ -1,8 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base32"
 	"encoding/base64"
+	"fmt"
+	ipfssenc "github.com/jbenet/ipfs-senc"
 	"net/http"
+	"server/config"
+	"server/pkg"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -12,7 +19,7 @@ import (
 	"server/stribog"
 )
 
-func encrypt(c echo.Context) error {
+func Encrypt(c echo.Context) error {
 	var req RequestFile
 
 	if err := c.Bind(&req); err != nil {
@@ -27,33 +34,44 @@ func encrypt(c echo.Context) error {
 		return c.JSON(http.StatusForbidden, err.Error())
 	}
 
-	accum, err := storage.GetWitness(db.DB, req.PK)
+	base64Cipher, err := enc(storage.User{
+		ID:         req.ID,
+		TgName:     "",
+		PK:         req.PK,
+		Department: req.Department,
+		Level:      req.Level,
+	}, req.File)
 	if err != nil {
-		c.Logger().Errorf("failed to GetWitness: %s", err.Error())
+		c.Logger().Errorf("failed to enc: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, ResponseFile{File: base64Cipher})
+}
+
+func enc(user storage.User, file string) (string, error) {
+	accum, err := storage.GetWitness(db.DB, user.PK)
+	if err != nil {
+		return "", fmt.Errorf("failed to GetWitness: %s", err.Error())
 	}
 
 	witLevel, err := base64.StdEncoding.DecodeString(accum.WitnessLevel)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString wit level: %s", err.Error())
-		return c.JSON(http.StatusInternalServerError, err.Error())
+		return "", fmt.Errorf("failed to DecodeString wit level: %s", err.Error())
 	}
 
 	witDep, err := base64.StdEncoding.DecodeString(accum.WitnessDep)
 	if err != nil {
-		c.Logger().Errorf("failed to DecodeString wit dep: %s", err.Error())
-		return c.JSON(http.StatusInternalServerError, err.Error())
+		return "", fmt.Errorf("failed to DecodeString wit dep: %s", err.Error())
 	}
 
-	if err = security.Check(req.Level, req.Department, witLevel, witDep); err != nil {
-		c.Logger().Errorf("failed to Check: %s", err.Error())
-		return c.JSON(http.StatusInternalServerError, err)
+	if err = security.Check(user.Level, user.Department, witLevel, witDep); err != nil {
+		return "", fmt.Errorf("failed to Check: %s", err.Error())
 	}
 
-	cipherRaw, depAuthRaw, levelAuthRaw, err := crypto.Encrypt(req.Department, req.Level, []byte(req.File))
+	cipherRaw, depAuthRaw, levelAuthRaw, err := crypto.Encrypt(user.Department, user.Level, []byte(file))
 	if err != nil {
-		c.Logger().Errorf("failed to Encrypt: %s", err.Error())
-		return c.JSON(http.StatusInternalServerError, err)
+		return "", fmt.Errorf("failed to Encrypt: %s", err.Error())
 	}
 
 	base64Cipher := base64.StdEncoding.EncodeToString(cipherRaw)
@@ -61,11 +79,33 @@ func encrypt(c echo.Context) error {
 		ID:        base64.StdEncoding.EncodeToString(stribog.New512().Sum([]byte(base64Cipher))),
 		LevelAuth: base64.StdEncoding.EncodeToString(levelAuthRaw),
 		DepAuth:   base64.StdEncoding.EncodeToString(depAuthRaw)}); err != nil {
-		c.Logger().Errorf("failed to SetAbe: %s", err.Error())
-		return c.JSON(http.StatusInternalServerError, err)
+		return "", fmt.Errorf("failed to SetAbe: %s", err.Error())
 	}
 
-	return c.JSON(http.StatusOK, ResponseFile{File: base64Cipher})
+	return base64Cipher, nil
+}
+
+func upload(key string, config config.Config, file []byte) (string, error) {
+	//API = "ipfs.io"
+	fmt.Println("Initializing ipfs node...")
+	n, err := ipfssenc.GetRWIPFSNode(config.IPFS.API)
+	if err != nil {
+		return "", err
+	}
+	if !n.IsUp() {
+		return "", pkg.ErrNoIPFS
+	}
+
+	link, err := ipfssenc.Put(n, bytes.NewReader(file))
+	if err != nil {
+		return "", fmt.Errorf("failed to Put: %w", err)
+	}
+
+	l := string(link)
+	if !strings.HasPrefix(l, "/ipfs/") {
+		l = "/ipfs/" + l
+	}
+	return base32.StdEncoding.EncodeToString([]byte(key)), nil
 }
 
 // Handler
