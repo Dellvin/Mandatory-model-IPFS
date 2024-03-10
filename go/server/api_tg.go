@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"server/ipfs"
 	"server/pkg"
+	"strconv"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -22,7 +24,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	switch {
 	case data.Text == "/start":
 		helloMessage(ctx, b, data, l)
-	case update.Message.Document != nil:
+	case update.Message != nil && update.Message.Document != nil:
 		f, err := b.GetFile(ctx, &bot.GetFileParams{FileID: update.Message.Document.FileID})
 		if err != nil {
 			l.Error("failed to GetFile", zap.Error(err))
@@ -51,7 +53,7 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	default:
 		kb := &models.InlineKeyboardMarkup{
 			InlineKeyboard: [][]models.InlineKeyboardButton{
-				{{Text: "Список файлов", CallbackData: "list"}}, {{Text: "Скачать файл", CallbackData: "download"}},
+				{{Text: "Список файлов", CallbackData: "button list"}}, {{Text: "Скачать файл", CallbackData: "button download"}},
 			},
 		}
 
@@ -91,9 +93,10 @@ func upload(file []byte, user *storage.User, fileMeta storage.File) error {
 	return nil
 }
 
-func callbackHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	//data := ctx.Value("data").(*TgData)
-	//user:=ctx.Value("user").(*storage.User)
+func callbackMenuHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
+	data := ctx.Value("data").(*pkg.TgData)
+	user := ctx.Value("user").(*storage.User)
+	l := ctx.Value("logger").(*zap.Logger)
 
 	b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 		CallbackQueryID: update.CallbackQuery.ID,
@@ -101,14 +104,102 @@ func callbackHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	})
 
 	switch update.CallbackQuery.Data {
-	case "upload":
+	case "button list":
+		files, err := storage.GetAccessedFiles(db.DB, *user)
+		if err != nil {
+			l.Error("failed to ReadAll", zap.Error(err))
+			b.SendMessage(ctx, &bot.SendMessageParams{ChatID: data.ChatID, Text: fmt.Sprintf("Failed to ReadAll")})
+			return
+		}
+		var output = "List of available files"
+		for _, f := range files {
+			output = fmt.Sprintf("%s\nName: <b>%s</b>, Type: <b>%s</b>", output, f.Name, f.MimeType)
+		}
+		b.SendMessage(ctx, &bot.SendMessageParams{ChatID: data.ChatID, Text: output, ParseMode: models.ParseModeHTML})
+	case "button download":
+		files, err := storage.GetAccessedFiles(db.DB, *user)
+		if err != nil {
+			l.Error("failed to ReadAll", zap.Error(err))
+			b.SendMessage(ctx, &bot.SendMessageParams{ChatID: data.ChatID, Text: fmt.Sprintf("Failed to ReadAll")})
+			return
+		}
+		buttons := [][]models.InlineKeyboardButton{}
+		for _, file := range files {
+			buttons = append(buttons, []models.InlineKeyboardButton{{Text: file.Name, CallbackData: "file " + strconv.FormatInt(file.ID, 10)}})
+		}
 
+		kb := &models.InlineKeyboardMarkup{
+			InlineKeyboard: buttons,
+		}
+
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      data.ChatID,
+			Text:        "Files available for download",
+			ReplyMarkup: kb,
+		})
+	default:
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.CallbackQuery.Message.Message.Chat.ID,
+			Text:   "unknown button",
+		})
 	}
 
-	b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: update.CallbackQuery.Message.Message.Chat.ID,
-		Text:   "You selected the button: " + update.CallbackQuery.Data,
+}
+
+func callbackFileHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
+	data := ctx.Value("data").(*pkg.TgData)
+	user := ctx.Value("user").(*storage.User)
+	l := ctx.Value("logger").(*zap.Logger)
+
+	b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+		CallbackQueryID: update.CallbackQuery.ID,
+		ShowAlert:       false,
 	})
+
+	id, err := strconv.Atoi(update.CallbackQuery.Data[5:])
+	if err != nil {
+		l.Error("failed to ReadAll", zap.Error(err))
+		b.SendMessage(ctx, &bot.SendMessageParams{ChatID: data.ChatID, Text: fmt.Sprintf("Failed to Atoi")})
+		return
+	}
+
+	file, err := storage.GetFile(db.DB, id)
+	if err != nil {
+		l.Error("failed to GetFile", zap.Error(err))
+		b.SendMessage(ctx, &bot.SendMessageParams{ChatID: data.ChatID, Text: fmt.Sprintf("failed to GetFile")})
+		return
+	}
+	raw, err := ipfs.Download(file.IpfsKey, "")
+	if err != nil {
+		l.Error("failed to Download", zap.Error(err))
+		b.SendMessage(ctx, &bot.SendMessageParams{ChatID: data.ChatID, Text: fmt.Sprintf("failed to Download")})
+		return
+	}
+	decrypted, err := dec(storage.User{
+		ID:         user.ID,
+		TgName:     "",
+		PK:         user.PK,
+		Department: user.Department,
+		Level:      user.Level,
+	}, string(raw))
+
+	if err != nil {
+		l.Error("failed to dec", zap.Error(err))
+		b.SendMessage(ctx, &bot.SendMessageParams{ChatID: data.ChatID, Text: fmt.Sprintf("failed to dec")})
+		return
+	}
+
+	m, err := b.SendDocument(ctx, &bot.SendDocumentParams{
+		ChatID:   data.ChatID,
+		Document: &models.InputFileUpload{Filename: file.Name, Data: bytes.NewReader([]byte(decrypted))},
+		Caption:  "Document",
+	})
+	if err != nil {
+		fmt.Println(m)
+		l.Error("failed to send file", zap.Error(err))
+		b.SendMessage(ctx, &bot.SendMessageParams{ChatID: data.ChatID, Text: fmt.Sprintf("failed to send file")})
+		return
+	}
 }
 
 func helloMessage(ctx context.Context, b *bot.Bot, data *pkg.TgData, l *zap.Logger) {

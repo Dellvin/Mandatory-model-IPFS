@@ -89,7 +89,8 @@ func main() {
 	opts := []bot.Option{
 		bot.WithMiddlewares(showMessageWithUserName),
 		bot.WithDefaultHandler(handler),
-		bot.WithCallbackQueryDataHandler("button", bot.MatchTypePrefix, callbackHandler),
+		bot.WithCallbackQueryDataHandler("button", bot.MatchTypePrefix, callbackMenuHandler),
+		bot.WithCallbackQueryDataHandler("file", bot.MatchTypePrefix, callbackFileHandler),
 	}
 
 	b, err := bot.New(cfg.Telegram.Key, opts...)
