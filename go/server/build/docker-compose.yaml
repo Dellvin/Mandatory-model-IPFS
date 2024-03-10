@@ -8,7 +8,7 @@ services:
     networks:
       - installment-loc
     volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+#      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./loc/db:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: postgres

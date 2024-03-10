@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -98,12 +99,14 @@ func ParseFlags() (string, error) {
 	return configPath, nil
 }
 
-// Process is the middleware function.
-func (conf *Config) Process(next echo.HandlerFunc) echo.HandlerFunc {
+// CheckAdmin is the middleware function.
+func (conf *Config) CheckAdmin(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		if c.Request().Header.Get("X-Admin-Key") != conf.Server.AdminToken {
-			c.Logger().Errorf("incorrect admin header")
-			return echo.NewHTTPError(http.StatusForbidden, "incorrect admin header")
+		if strings.Contains(c.Request().RequestURI, `/admin/`) {
+			if c.Request().Header.Get("X-Admin-Key") != conf.Server.AdminToken {
+				c.Logger().Errorf("incorrect admin header")
+				return echo.NewHTTPError(http.StatusForbidden, "incorrect admin header")
+			}
 		}
 
 		return next(c)

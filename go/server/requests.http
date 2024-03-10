@@ -83,15 +83,29 @@ Content-Type: application/json
 
 
 ### encrypt file user
-POST http://localhost:8080/file/encrypt
+POST http://localhost:8088/file/encrypt
 Content-Type: application/json
 
 {
-  "Level": 1,
-  "Department": 1,
   "ID": 1,
-  "PK": "Zcrea0X43p8=",
-  "File": "eto rabotaet"
+  "TgName": "DellvinBlack",
+  "PK": "DZ35ZICp1og=",
+  "Department": 1,
+  "Level": 1,
+  "File": "hello ipfs"
+}
+
+### decrypt file user
+POST http://localhost:8088/file/decrypt
+Content-Type: application/json
+
+{
+  "ID": 1,
+  "TgName": "DellvinBlack",
+  "PK": "DZ35ZICp1og=",
+  "Department": 1,
+  "Level": 1,
+  "File": "hello ipfs"
 }
 
 ### encrypt file BOSS

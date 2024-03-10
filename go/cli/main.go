@@ -63,7 +63,6 @@ func errMain() error {
 // ipfs daemon
 // go --key D44DHB54VE62PMID4JLG6WYZWTPKUJFO3Q2NJOOTKMUGKLX5B57A==== download /ipfs/Qme4rKqR3iDUa9iEx9iyYRTFhY4X1skXQFGSJdTGFQw9Zx
 func main() {
-
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, Usage)
 	}

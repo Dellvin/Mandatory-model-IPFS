@@ -72,16 +72,16 @@ func main() {
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.Use(cfg.Process)
 
 	// Routes
+	e.POST("/file/encrypt", Encrypt)
+	e.POST("/file/decrypt", decrypt)
+
+	e.Use(cfg.CheckAdmin)
 	e.POST("/admin/add", add)
 	e.PUT("/admin/check", check)
 	e.DELETE("/admin/delete", delete)
 	e.GET("/admin/all", getAll)
-	e.POST("/file/Encrypt", Encrypt)
-	e.POST("/file/decrypt", decrypt)
-
 	// set up tg bot
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
